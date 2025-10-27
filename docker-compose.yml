@@ -1,0 +1,73 @@
+name: openwebui-vllm
+
+#x-hf-cache: &hf_cache
+#  - ./hf-cache:/root/.cache/huggingface
+
+x-hf-cache: &hf_cache
+  - ${HF_CACHE_DIR:-${HOME}/.cache/hf-cache}:/root/.cache/huggingface
+
+
+volumes:
+  openwebui_data:
+
+networks:
+  appnet: {}
+
+services:
+
+  #====================  vLLM (OpenAI-compatible server)  ====================#
+  vllm:
+    image: vllm/vllm-openai:latest
+    command: >
+      --model ${VLLM_MODEL}
+      --host 0.0.0.0 --port 8000
+      --gpu-memory-utilization ${VLLM_GPU_UTIL}
+      --dtype auto
+      --trust-remote-code
+    # ^uncomment, include in command to run custom models
+
+    ipc: host
+    environment:
+      # If you pull gated/private models, set this in .env and uncomment:
+      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN}
+    volumes: *hf_cache
+    expose:
+        - "8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0", "1"]  # dual
+              #device_ids: ["1"]
+              capabilities: [gpu]
+              #count: all
+    networks: [appnet]
+    restart: unless-stopped  # TODO(evan): this means that the model is autoloaded into GPU, ALWAYS, even when not using.
+
+  #===============================  Open WebUI  ==============================#
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    environment:
+      # point Open WebUI to vLLM's OpenAI-compatible API inside the network
+      OPENAI_API_BASE_URL: http://vllm:8000/v1
+      # enable on first signup to create an admin
+      #ENABLE_SIGNUP: "true"
+    volumes:
+      - openwebui_data:/app/backend/data
+    expose:
+        - "8080"
+    networks: [appnet]
+    restart: unless-stopped
+
+  #===================  Caddy (reverse proxy for subpaths)  ==================#
+  caddy:
+    image: caddy:2
+    depends_on: [open-webui, vllm]
+    networks: [appnet]
+    # bind to loopback so tailscale serve can point to it
+    ports:
+      - "127.0.0.1:2080:2080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    restart: unless-stopped
