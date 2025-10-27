@@ -22,10 +22,13 @@ services:
     # Publish on loopback so Tailscale Serve can proxy to it
     ports:
       - "127.0.0.1:8000:8000"
-    device_requests:
-      - driver: nvidia
-        device_ids: ["1"]
-        #device_ids: ["0", "1"]  # dual
-        capabilities: ["gpu"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["1"]
+              #device_ids: ["0", "1"]  # dual
+              capabilities: [gpu]
     networks: [appnet]
-    restart: unless-stopped  # TODO(evan): this means that the model is autoloaded into GPU, ALWAYS, even when not using.
+    restart: unless-stopped  # TODO(evan): use that whatever vllm option that will release gpu mem while idle

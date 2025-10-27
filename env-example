@@ -1,0 +1,14 @@
+# non-vllm stuff
+# ==============
+HF_TOKEN=
+HF_CACHE_DIR=
+
+
+#===================================  vLLM  ==================================#
+
+#===== MODEL
+VLLM_MODEL=nvidia/NVIDIA-Nemotron-Nano-9B-v2  # e.g.
+
+#===== UTIL
+# (0.85–0.95 is g; start low first)
+VLLM_GPU_UTIL=0.90
