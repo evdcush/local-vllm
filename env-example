@@ -5,10 +5,22 @@ HF_CACHE_DIR=
 
 
 #===================================  vLLM  ==================================#
+#===== ENV
+# irrelevant vllm stuffs
+VLLM_DO_NOT_TRACK=1
 
 #===== MODEL
 VLLM_MODEL=nvidia/NVIDIA-Nemotron-Nano-9B-v2  # e.g.
 
-#===== UTIL
+#===== GPU-related UTIL
 # (0.85–0.95 is g; start low first)
-VLLM_GPU_UTIL=0.90
+VLLM_GPU_UTIL=0.88
+
+# model size (this what you prob. tweak if OOM)
+#VLLM_MAX_MODEL_LEN=16384   # 2^14
+#VLLM_MAX_MODEL_LEN=8192    # 2^13
+VLLM_MAX_MODEL_LEN=4096    # 2^12
+
+# number of GPUs to use
+VLLM_TP_SIZE=
+#--tensor-parallel-size 2

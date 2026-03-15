@@ -1,28 +1,43 @@
 name: vllm
 
-x-hf-cache: &hf_cache
-  - ${HF_CACHE_DIR:-${HOME}/.cache/hf-cache}:/root/.cache/huggingface
+# ON MULTI-GPU
+# ============
+# this is currently not managed well.
+# if you wish to change the number of devices (in my local, home machine case,
+# usually single or dual GPU), to N, you must change it in MULTIPLE PLACES:
+# 1. Set VLLM_TP_SIZE=N
+# 2. Explicitly define the N device IDs for `CUDA_VISIBLE_DEVICES`
+# 3. Specify these N device IDs in the deployment resources
 
 networks:
-  appnet: {}
+  # copy-paste this block into any other services that use this vllm service.
+  ai-backend:
+    external: true
 
 services:
   #====================  vLLM (OpenAI-compatible server)  ====================#
   vllm:
-    image: vllm/vllm-openai:latest
+    # NB: `latest` very often does NOT support models that have been released
+    #     within the last 7~14 days. So it's best you stick with `nightly`
+    #image: vllm/vllm-openai:latest
+    image: vllm/vllm-openai:nightly
     command: >
       --model ${VLLM_MODEL}
       --host 0.0.0.0 --port 8000
-      --gpu-memory-utilization ${VLLM_GPU_UTIL}
       --dtype auto
       --trust-remote-code
-    #--max-model-len 4096
-    # the model-max-len adde due to OOMs on a 1b model and its' kv-cache shit
+      --gpu-memory-utilization ${VLLM_GPU_UTIL:-0.90}
+      --tensor-parallel-size ${VLLM_TP_SIZE:-1}
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-8192}
+    #--enforce-eager
+    # ^ this flag was necessary for a bizarre, atypical OOM with Qwen3.5-9B. kept for now.
     ipc: host
     environment:
+      VLLM_DO_NOT_TRACK: ${VLLM_DO_NOT_TRACK:-1}
       HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN}
-    volumes: *hf_cache
-    # Publish on loopback so Tailscale Serve can proxy to it
+      #CUDA_VISIBLE_DEVICES: "0,1"
+    volumes:
+      - ${HF_CACHE_DIR:-${HOME}/.cache/hf-cache}:/root/.cache/huggingface
     ports:
       - "127.0.0.1:8000:8000"
     deploy:
@@ -31,7 +46,8 @@ services:
           devices:
             - driver: nvidia
               device_ids: ["1"]
-              #device_ids: ["0", "1"]  # dual
               capabilities: [gpu]
-    networks: [appnet]
-    restart: unless-stopped  # TODO(evan): use that whatever vllm option that will release gpu mem while idle
+              #device_ids: ["0", "1"]  # dual
+    networks:
+      - ai-backend
+    restart: unless-stopped
